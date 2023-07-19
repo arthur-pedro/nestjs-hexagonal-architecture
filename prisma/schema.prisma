@@ -1,0 +1,374 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model adonis_schema {
+  id             Int       @id @default(autoincrement())
+  name           String    @db.VarChar(255)
+  batch          Int
+  migration_time DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model adonis_schema_versions {
+  version Int
+
+  @@ignore
+}
+
+model allocation_simulation_operations {
+  id                       Int                     @id @default(autoincrement())
+  allocation_simulation_id Int?
+  asset_id                 Int?
+  operation                String                  @db.VarChar(100)
+  value                    Float
+  created_at               DateTime?               @db.Timestamptz(6)
+  updated_at               DateTime?               @db.Timestamptz(6)
+  allocation_simulations   allocation_simulations? @relation(fields: [allocation_simulation_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "allocation_simulation_operations_allocation_simulation_id_forei")
+  assets                   assets?                 @relation(fields: [asset_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "allocation_simulation_operations_asset_id_foreign")
+}
+
+model allocation_simulations {
+  id                               Int                                @id @default(autoincrement())
+  goal_id                          Int?
+  name                             String                             @db.VarChar(100)
+  description                      String                             @db.VarChar(100)
+  created_at                       DateTime?                          @db.Timestamptz(6)
+  updated_at                       DateTime?                          @db.Timestamptz(6)
+  allocation_simulation_operations allocation_simulation_operations[]
+  goals                            goals?                             @relation(fields: [goal_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "allocation_simulations_goal_id_foreign")
+}
+
+model api_tokens {
+  id         Int       @id @default(autoincrement())
+  user_id    Int?
+  name       String    @db.VarChar(255)
+  type       String    @db.VarChar(255)
+  token      String    @unique(map: "api_tokens_token_unique") @db.VarChar(64)
+  expires_at DateTime? @db.Timestamptz(6)
+  created_at DateTime  @db.Timestamptz(6)
+  users      users?    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "api_tokens_user_id_foreign")
+}
+
+model asset_categories {
+  id                     Int                    @id @default(autoincrement())
+  parent_id              Int?
+  company_id             Int
+  name                   String                 @db.VarChar(255)
+  short_name             String                 @db.VarChar(255)
+  order                  Int
+  variable_income        Boolean?               @default(false)
+  created_at             DateTime?              @db.Timestamptz(6)
+  updated_at             DateTime?              @db.Timestamptz(6)
+  companies              companies              @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "asset_categories_company_id_foreign")
+  asset_categories       asset_categories?      @relation("asset_categoriesToasset_categories", fields: [parent_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "asset_categories_parent_id_foreign")
+  other_asset_categories asset_categories[]     @relation("asset_categoriesToasset_categories")
+  assets                 assets[]
+  profile_weight_basis   profile_weight_basis[]
+
+  @@unique([company_id, name], map: "asset_categories_company_id_name_unique")
+}
+
+model assets {
+  id                               Int                                @id @default(autoincrement())
+  company_id                       Int
+  asset_category_id                Int?
+  name                             String                             @db.VarChar(255)
+  description                      String                             @db.VarChar(255)
+  price                            Float
+  created_at                       DateTime?                          @db.Timestamptz(6)
+  updated_at                       DateTime?                          @db.Timestamptz(6)
+  allocation_simulation_operations allocation_simulation_operations[]
+  asset_categories                 asset_categories?                  @relation(fields: [asset_category_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "assets_asset_category_id_foreign")
+  companies                        companies                          @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "assets_company_id_foreign")
+  portfolios                       portfolios[]                       @ignore
+
+  @@unique([name, company_id, asset_category_id], map: "assets_name_company_id_asset_category_id_unique")
+}
+
+model cash {
+  id         Int       @id @default(autoincrement())
+  client_id  Int?
+  value      Float     @default(0)
+  created_at DateTime? @db.Timestamptz(6)
+  updated_at DateTime? @db.Timestamptz(6)
+  clients    clients?  @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "cash_client_id_foreign")
+}
+
+model cash_flows {
+  id         Int                      @id @default(autoincrement())
+  client_id  Int?
+  value      Float
+  type       String                   @db.VarChar(255)
+  holder     String                   @db.VarChar(255)
+  operation  enum_cash_flow_operation
+  created_at DateTime?                @db.Timestamptz(6)
+  updated_at DateTime?                @db.Timestamptz(6)
+  clients    clients?                 @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "cash_flows_client_id_foreign")
+}
+
+model clients {
+  id                         Int          @id @default(autoincrement())
+  user_id                    Int?
+  family_id                  Int?
+  internal_code              String       @db.VarChar(255)
+  condinheiro_code           String       @db.VarChar(255)
+  payment_day                String       @db.VarChar(255)
+  private_pension_percentage Float        @default(0)
+  created_at                 DateTime?    @db.Timestamptz(6)
+  updated_at                 DateTime?    @db.Timestamptz(6)
+  xp_code                    String?      @db.VarChar(255)
+  cash                       cash[]
+  cash_flows                 cash_flows[]
+  families                   families?    @relation(fields: [family_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "clients_family_id_foreign")
+  users                      users?       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "clients_user_id_foreign")
+  goals                      goals[]
+
+  @@unique([user_id, internal_code, condinheiro_code], map: "clients_user_id_internal_code_condinheiro_code_unique")
+}
+
+model companies {
+  id                       Int                        @id @default(autoincrement())
+  cnpj                     String                     @unique(map: "companies_cnpj_unique") @db.VarChar(14)
+  social_reason            String                     @unique(map: "companies_social_reason_unique") @db.VarChar(255)
+  fantasy_name             String                     @db.VarChar(255)
+  created_at               DateTime?                  @db.Timestamptz(6)
+  updated_at               DateTime?                  @db.Timestamptz(6)
+  asset_categories         asset_categories[]
+  assets                   assets[]
+  families                 families[]
+  profiles                 profiles[]
+  providers                providers?
+  users                    users[]
+  xp_integration_histories xp_integration_histories[]
+  xp_integration_schedules xp_integration_schedules[]
+}
+
+model datahub_user_assets {
+  id                  Int                          @id @default(autoincrement())
+  company_id          String                       @db.VarChar(255)
+  user_internal_code  String                       @db.VarChar(255)
+  user_external_code  String                       @db.VarChar(255)
+  user_acronym        String                       @db.VarChar(255)
+  user_family_acronym String                       @db.VarChar(255)
+  user_full_name      String                       @db.VarChar(255)
+  asset_name          String                       @db.VarChar(255)
+  asset_reference     String                       @db.VarChar(255)
+  asset_custody       String                       @db.VarChar(255)
+  asset_amount        String                       @db.VarChar(255)
+  asset_price         String                       @db.VarChar(255)
+  asset_cotation      String                       @db.VarChar(255)
+  asset_category      String                       @db.VarChar(255)
+  asset_sub_category  String                       @db.VarChar(255)
+  error_message       String?
+  status              enum_datahub_status_registro
+  created_at          DateTime?                    @db.Timestamptz(6)
+  updated_at          DateTime?                    @db.Timestamptz(6)
+
+  @@unique([id, company_id, user_internal_code, user_external_code, user_acronym, user_family_acronym, user_full_name, asset_name, asset_reference, asset_custody, asset_amount, asset_price, asset_cotation, asset_category, asset_sub_category], map: "datahub_user_assets_id_company_id_user_internal_code_user_exter")
+}
+
+model employees {
+  id         Int                @id @default(autoincrement())
+  user_id    Int?               @unique(map: "employees_user_id_unique")
+  role       enum_employee_role
+  created_at DateTime?          @db.Timestamptz(6)
+  updated_at DateTime?          @db.Timestamptz(6)
+  users      users?             @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "employees_user_id_foreign")
+}
+
+model families {
+  id          Int       @id @default(autoincrement())
+  company_id  Int
+  name        String    @db.VarChar(255)
+  description String    @db.VarChar(255)
+  created_at  DateTime? @db.Timestamptz(6)
+  updated_at  DateTime? @db.Timestamptz(6)
+  clients     clients[]
+  companies   companies @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "families_company_id_foreign")
+
+  @@unique([company_id, name], map: "families_company_id_name_unique")
+}
+
+model goals {
+  id                     Int                      @id @default(autoincrement())
+  client_id              Int?
+  profile_id             Int?
+  name                   String                   @db.VarChar(255)
+  description            String?                  @db.VarChar(255)
+  created_at             DateTime?                @db.Timestamptz(6)
+  updated_at             DateTime?                @db.Timestamptz(6)
+  allocation_simulations allocation_simulations[]
+  clients                clients?                 @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "goals_client_id_foreign")
+  profiles               profiles?                @relation(fields: [profile_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "goals_profile_id_foreign")
+  portfolios             portfolios[]             @ignore
+
+  @@unique([client_id, name], map: "goals_client_id_name_unique")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model portfolios {
+  goal_id  Int?
+  asset_id Int?
+  custody  String? @db.VarChar(255)
+  amount   Float
+  assets   assets? @relation(fields: [asset_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "portfolios_asset_id_foreign")
+  goals    goals?  @relation(fields: [goal_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "portfolios_goal_id_foreign")
+
+  @@unique([goal_id, asset_id], map: "portfolios_goal_id_asset_id_unique")
+  @@ignore
+}
+
+model profile_weight_basis {
+  id                Int               @id @default(autoincrement())
+  profile_id        Int?
+  asset_category_id Int?
+  weight            Float
+  gap               Float
+  created_at        DateTime?         @db.Timestamptz(6)
+  updated_at        DateTime?         @db.Timestamptz(6)
+  asset_categories  asset_categories? @relation(fields: [asset_category_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "profile_weight_basis_asset_category_id_foreign")
+  profiles          profiles?         @relation(fields: [profile_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "profile_weight_basis_profile_id_foreign")
+
+  @@unique([profile_id, asset_category_id], map: "profile_weight_basis_profile_id_asset_category_id_unique")
+}
+
+model profiles {
+  id                   Int                    @id @default(autoincrement())
+  company_id           Int
+  name                 String                 @db.VarChar(255)
+  custom               Boolean?               @default(false)
+  created_at           DateTime?              @db.Timestamptz(6)
+  updated_at           DateTime?              @db.Timestamptz(6)
+  goals                goals[]
+  profile_weight_basis profile_weight_basis[]
+  companies            companies              @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "profiles_company_id_foreign")
+
+  @@unique([company_id, name], map: "profiles_company_id_name_unique")
+}
+
+model providers {
+  id                              Int                        @id @default(autoincrement())
+  company_id                      Int                        @unique(map: "providers_company_id_unique")
+  name                            enum_datahub_provider_name
+  description                     String?                    @db.VarChar(255)
+  client_id                       String                     @db.VarChar(255)
+  client_secret                   String                     @db.VarChar(255)
+  grant_type                      String                     @db.VarChar(255)
+  scope                           String                     @db.VarChar(255)
+  ocp_apim_subscription_key       String                     @db.VarChar(255)
+  referer                         String                     @db.VarChar(255)
+  user_agent                      String                     @db.VarChar(255)
+  accept_language                 String                     @db.VarChar(255)
+  cookie                          String                     @db.VarChar(255)
+  content_type                    String                     @db.VarChar(255)
+  get_access_token_api            String                     @db.VarChar(255)
+  get_operations_api              String                     @db.VarChar(255)
+  condinheiro_credential_name     String                     @db.VarChar(255)
+  condinheiro_credential_password String                     @db.VarChar(255)
+  created_at                      DateTime?                  @db.Timestamptz(6)
+  updated_at                      DateTime?                  @db.Timestamptz(6)
+  companies                       companies                  @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "providers_company_id_foreign")
+}
+
+model users {
+  id         Int              @id @default(autoincrement())
+  email      String           @db.VarChar(100)
+  password   String           @db.VarChar(100)
+  full_name  String           @db.VarChar(100)
+  best_name  String           @db.VarChar(100)
+  company_id Int
+  status     enum_user_status
+  type       enum_user_type
+  created_at DateTime?        @db.Timestamptz(6)
+  updated_at DateTime?        @db.Timestamptz(6)
+  api_tokens api_tokens[]
+  clients    clients[]
+  employees  employees?
+  companies  companies        @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "users_company_id_foreign")
+
+  @@unique([email, company_id], map: "users_email_company_id_unique")
+}
+
+model xp_integration_histories {
+  id                        Int                          @id @default(autoincrement())
+  company_id                Int
+  office_code               Int?
+  office_name               String?
+  customer_code             Int?
+  operation_date            DateTime?                    @db.Timestamptz(6)
+  settlement_date           DateTime?                    @db.Timestamptz(6)
+  asset                     String?
+  amount                    Float?
+  movement_type             String?
+  movement_type_description String?
+  price                     Float?
+  gross_value               Float?
+  ir_value                  Float?
+  iof_value                 Float?
+  net_value                 Float?
+  asset_classification      String?
+  fund_document             String?
+  quotation_date            DateTime?                    @db.Timestamptz(6)
+  rf_cetip_selic_code       String?
+  rf_expiration_date        DateTime?                    @db.Timestamptz(6)
+  process_date              DateTime?                    @db.Timestamptz(6)
+  type_rf                   String?
+  index_percentage_rf       Float?
+  index_rf                  String?
+  tax_rf                    Float?
+  message                   String?
+  status                    enum_datahub_status_registro
+  created_at                DateTime?                    @db.Timestamptz(6)
+  updated_at                DateTime?                    @db.Timestamptz(6)
+  companies                 companies                    @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "xp_integration_histories_company_id_foreign")
+}
+
+model xp_integration_schedules {
+  id                        Int       @id @default(autoincrement())
+  company_id                Int
+  schedule_integration_cron String?   @default("false") @db.VarChar(255)
+  active                    Boolean?  @default(false)
+  created_at                DateTime? @db.Timestamptz(6)
+  updated_at                DateTime? @db.Timestamptz(6)
+  name                      String?   @db.VarChar
+  companies                 companies @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "xp_integration_schedules_company_id_foreign")
+}
+
+enum enum_cash_flow_operation {
+  INFLOW
+  OUTFLOW
+}
+
+enum enum_datahub_provider_name {
+  XP
+}
+
+enum enum_datahub_status_registro {
+  NP
+  PR
+  EP
+  ER
+}
+
+enum enum_employee_role {
+  MASTER
+  ALOCATOR
+}
+
+enum enum_user_status {
+  ACTIVE
+  PENDING
+  DELETED
+  REQUEST_PASS
+}
+
+enum enum_user_type {
+  CLIENT
+  EMPLOYEE
+}
